@@ -56,7 +56,7 @@ def main(directory, *args, **kwargs):
     byd = qs.utils.download_returns("BYDDF")
     geely = qs.utils.download_returns("GELYF")
 
-    qs.reports.html(geely, spy, output="Downloads\\qs_report.html")
+    qs.reports.html(geely, spy, output="C:\\Users\\franc\\Downloads\\qs_report.html")
     
 if __name__ == "__main__":
     dir_ = os.path.dirname(__file__) + "\\"

@@ -162,6 +162,7 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
                 a.yaxis.set_ticks_position("right") 
                 a.yaxis.set_label_position("right")
             
+            ax1.set_ylim(bottom=0)
             fig.autofmt_xdate()
             fig.tight_layout()
             plt.show()

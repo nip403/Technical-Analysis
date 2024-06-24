@@ -6,15 +6,24 @@ def main():
     path = os.path.dirname(__file__) + "\\"
     stock_data = path + "STOCK_DATA.xlsx"
     
-    cour = process_data(stock_data, "COUR")
-    write(stock_data, cour)
+    data = process_data(stock_data, "COUR")
+    write(stock_data, data)
     
-    # visualise
+    # Historical
+    stock(data)
+    SMA(data) # momentum/trend - SMA 50 & 200, MACD
+    RSI(data) # momentum/trend - RSI, stochastic RSI, %K, %D
+    FI(data) # volume - force index
+    BB(data) # volatility - bollinger bands low mid high
+    Fib(data) # momentum/trend - fib retracement + extension
     
-    stock(cour, plot_volume=0, candlestick=0)
-    SMA(cour, candlestick=True) # 50/200-day SMA, MACD (100-25 windows) (altered ta module source wrapper.py)
-    BB(cour, candlestick=True) # 200 period bollinger bands
-    RSI(cour) # RSI, Stochastic RSI, %K, %D - 50 day window
+    # Future
+    #cour = ARIMA(cour)
+    # sizing - kelly criterion
+    # VaR - monte carlo
+    
+    
+    
     
 if __name__ == "__main__":
     main()
