@@ -2,10 +2,22 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import pmdarima as pm
-from pmdarima.arima import ndiffs, nsdiffs
-from pmdarima.metrics import smape
-from sklearn.metrics import mean_squared_error
+from prophet import Prophet
+import statsmodels.api as sm
+from arch.unitroot import KPSS, ADF
+import itertools as it
+import warnings
+
+warnings.filterwarnings("ignore")
+
+#from statsmodels.stats.outliers_influence import summary_table
+#from sklearn.ensemble import RandomForestRegressor
+#from skforecast.ForecasterAutoreg import ForecasterAutoreg
+
+#import pmdarima as pm
+#from pmdarima.arima import ndiffs, nsdiffs
+#from pmdarima.metrics import smape
+#from sklearn.metrics import mean_squared_error
 
 def fibonacci(df: pd.DataFrame) -> pd.DataFrame:
     highest_swing, lowest_swing = -1, -1
@@ -41,58 +53,75 @@ def _extensions(levels: list) -> list:
         
     return levels
 
-class Model:
-    def __init__(self, train, test):
-        self.ytrain = train
-        self.ytest = test
-        
-        self.forecasts = []
-        self.test_forecasts = []
-        
-    def train(self) -> None:
-        kpss_diffs = ndiffs(self.ytrain["Close"].values, alpha=0.05, test='kpss', max_d=6)
-        adf_diffs = ndiffs(self.ytrain["Close"].values, alpha=0.05, test='adf', max_d=6)
-        
-        self.model = pm.auto_arima(
-            self.ytrain["Close"].values, 
-            d=max(adf_diffs, kpss_diffs), 
-            seasonal=False, 
-            stepwise=True,
-            suppress_warnings=True, 
-            error_action="ignore", 
-            max_p=6,
-            max_order=None, 
-            #trace=True,
-        )
-        
-    def test(self) -> None:
-        print(self.model.predict())
-        
-        for i in self.ytest["Close"].values:    
-            predicted = self.model.predict(n_periods=1).tolist()[0]
-            self.test_forecasts.append(predicted)
-            self.model.update(i)
-        
-        self.ytest["ARIMA_pred"] = self.test_forecasts
-        
-        
-        print(self.model.predict())
-        
-    def __iter__(self):
-        return self
+def _prophet(data: pd.DataFrame, period: int) -> Prophet: # https://github.com/facebook/prophet
+    data = data.rename(columns={"Date": "ds", "Close": "y"})[["ds", "y"]]
+    model = Prophet()
     
-    def __next__(self):  
-        
-        return self
+    model.fit(data)
+    future = model.make_future_dataframe(periods=period)
+    forecast = model.predict(future)
+    
+    return model, forecast
 
-def _ARIMA(data: pd.DataFrame) -> pd.DataFrame:
-    train_len = int(data.shape[0] * 0.8)
+def _ARCH(data: pd.DataFrame, period: int) -> pd.DataFrame: # very expensive if reconfiguring
+    latest = data.iloc[-1]["Date"]
+    futuredates = pd.date_range(
+        start=latest + pd.DateOffset(days=1),
+        periods=period,
+    )
     
-    train_data = data.iloc[int(data.shape[0] * 0.1):train_len]
-    test_data = data.iloc[train_len:]
+    data = data.set_index("Date").rename(columns={"Close": "Price"})[["Price"]]
+    data["log_rtn"] = np.log(data.Price / data.Price.shift(1))
+    data = data.dropna(axis=0)
+
+    """
+    # Model Selection
+    results = []
+    d, D = 1, 1
     
-    model = Model(train_data, test_data)
-    model.train()
-    model.test()
+    for param in it.product(*(range(3) for _ in range(4))):
+        try:
+            model = sm.tsa.statespace.SARIMAX(
+                data.Price, 
+                order=(param[0], d, param[1]), 
+                seasonal_order=(param[2], D, param[3], 12)
+            ).fit(disp=-1)
+        except ValueError:
+            print('wrong parameters:', param)
+            continue
+        
+        #print(param)
+        results.append([param, model.bic])
+        
+    result_table = pd.DataFrame(results)
+    result_table.columns = ["parameters", "bic"]
     
-    return model
+    # best model
+    bic_model=sm.tsa.statespace.SARIMAX(
+        data.Price, 
+        order=(3, 1, 0), 
+        seasonal_order=(0, 1, 0, 12), # 365 period way too expensive
+    ).fit(disp=-1)
+    """
+
+    bic_model=sm.tsa.statespace.SARIMAX(
+        data.Price, 
+        order=(3, 1, 0), 
+        seasonal_order=(0, 1, 0, 50), # 365 period way too expensive
+    ).fit(disp=-1)
+    
+    #print(bic_model.summary())
+    
+    forecast = pd.DataFrame(
+        data=np.nan,
+        index=futuredates,
+        columns=["forecast"],
+    )
+    
+    data = pd.concat([data, forecast])
+    data["forecast"] = bic_model.predict()
+    
+    new = pd.Series(bic_model.get_forecast(steps=period).predicted_mean.values, index=futuredates)
+    data.loc[new.index, "forecast"] = new.array
+    
+    return data

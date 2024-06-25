@@ -1,4 +1,4 @@
-from core import fibonacci, _ARIMA
+from core import fibonacci, _prophet, _ARCH
 from utils import plotter
 import pandas as pd
 import numpy as np
@@ -34,6 +34,7 @@ def SMA(data: pd.DataFrame, **kwargs) -> None: # 50/200-day SMA, MACD (100-25 wi
     
     ax2.axhline(0, color="gray", linestyle="--")
     ax2.plot(data["Date"], data["trend_macd"], label="MACD", color="green")
+    ax2.axhline(data.iloc[-1]["trend_macd"], color="grey", linestyle="--")
     
 @plotter(False)
 def BB(data: pd.DataFrame, **kwargs) -> None: # 200 period bollinger bands
@@ -84,13 +85,17 @@ def Fib(data: pd.DataFrame, **kwargs) -> None:
             alpha=0.2, 
             label=f"{round(ratios[i + 1] * 100, 1):>6}% Level: {round(lvl, 2)}"
         )
-        
-@plotter()
-def ARIMA(data: pd.DataFrame, **kwargs) -> None:
-    ax = kwargs.get("ax1")
+
+@plotter(rescale=[0])
+def pred_prophet(data: pd.DataFrame, *, period, **kwargs) -> None:  
+    ax = kwargs.get("ax1")  
+    model, forecast = _prophet(data, period)
+    ax.set_xlim(data["Date"].iloc[0], forecast["ds"].iloc[-1])
+    model.plot(forecast, ax=ax)
     
-    model = _ARIMA(data)
-    data["ARIMA_pred"] = np.nan
-    data["ARIMA_pred"] = data.merge(model.ytest[["Date", "ARIMA_pred"]], on="Date", how="left", suffixes=("_0", ""))["ARIMA_pred"]
-    
-    ax.plot(data["Date"], data["ARIMA_pred"], label="Model Historical Prediction", color="red")
+@plotter(rescale=[0])
+def pred_ARCH(data: pd.DataFrame, *, period, **kwargs) -> None:  
+    ax = kwargs.get("ax1")  
+    forecast = _ARCH(data, period)
+    ax.set_xlim(data["Date"].iloc[0], forecast.index[-1])
+    ax.plot(forecast.index, forecast["forecast"], label="ARCH Prediction", color="red")

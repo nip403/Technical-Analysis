@@ -39,7 +39,7 @@ def process_data(file_name: str, sheet_name: str) -> pd.DataFrame:
         volume="Volume",
     )
 
-def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volume=False): # rows: number of plots, ratios: ratio of plot size
+def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volume=False, rescale=[]): # rows: number of plots, ratios: ratio of plot size
     """Plotting wrapper
     
     Decorates a function(
@@ -76,6 +76,10 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
         plot_volume (bool, optional): 
             Plot volume on price graph. 
             Defaults to False.
+        rescale (list, optional):
+            Since axis.set_xlim() is apparently irreversible, this is an option to request a list of axis indices (0-based) to exclude from x_lim setting.
+            e.g. [0, 2] excludes ax1, ax3 from xlim.
+            Defaults to [].
     """
     
     if ratios is not None:
@@ -156,11 +160,13 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
                 vol.yaxis.set_ticks_position("left") 
                 vol.yaxis.set_label_position("left")
             
-            for a in axes:
+            for p, a in enumerate(axes):
                 a.legend()
-                a.set_xlim(df["Date"].iloc[0], df["Date"].iloc[-1])
                 a.yaxis.set_ticks_position("right") 
                 a.yaxis.set_label_position("right")
+                
+                if not p in rescale:
+                    a.set_xlim(df["Date"].iloc[0], df["Date"].iloc[-1])
             
             ax1.set_ylim(bottom=0)
             fig.autofmt_xdate()
@@ -168,4 +174,3 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
             plt.show()
         return wrapper
     return dec
-
