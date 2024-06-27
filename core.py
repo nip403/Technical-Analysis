@@ -1,3 +1,4 @@
+from utils import _to_pct
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -44,6 +45,22 @@ def fibonacci(df: pd.DataFrame) -> pd.DataFrame:
             levels.append(min_lvl + ((max_lvl - min_lvl) * r))
     
     return _extensions(sorted(levels))
+
+def exit_strategy(*, stop_loss: float = None, price: float = None, pct_portfolio: float = None, pct_capital_to_risk: int = 0.02) -> float:
+    # % portfolio as a decimal e.g. 0.05
+    # uses 2% rule by default
+    # validation to come in a future DLC
+    
+    if stop_loss is None: # working backwards, not recommended
+        return price * (1 - (pct_capital_to_risk / pct_portfolio))
+    
+    if pct_portfolio is None:
+        return pct_capital_to_risk / (1 - (stop_loss / price))
+    
+    if pct_capital_to_risk is None: # calc how much the trade risks
+        return pct_portfolio * (1 - (stop_loss / price))
+        
+    raise
 
 def _extensions(levels: list) -> list:   
     extensions = [1, 1.618, 2, 2.618]
@@ -103,11 +120,11 @@ def _ARCH(data: pd.DataFrame, period: int) -> pd.DataFrame: # very expensive if 
         seasonal_order=(0, 1, 0, 12), # 365 period way too expensive
     ).fit(disp=-1)
     """
-
+    print("Loading SARIMAX model((3, 1, 0), (0, 1, 0, 75))")
     bic_model=sm.tsa.statespace.SARIMAX(
         data.Price, 
         order=(3, 1, 0), 
-        seasonal_order=(0, 1, 0, 50), # 365 period way too expensive
+        seasonal_order=(0, 1, 0, 75), # 365 period way too expensive
     ).fit(disp=-1)
     
     #print(bic_model.summary())
@@ -125,3 +142,27 @@ def _ARCH(data: pd.DataFrame, period: int) -> pd.DataFrame: # very expensive if 
     data.loc[new.index, "forecast"] = new.array
     
     return data
+
+def _exp_shortfall(returns: pd.Series, confidence_lvl: int | float, period: int = 1) -> pd.Series:
+    return returns[returns <= np.percentile(returns, confidence_lvl)].mean() * np.sqrt(period)
+    
+def _var(returns: pd.Series, confidence_level: int | float, period: int = 1) -> float:
+    return np.percentile(returns, confidence_level) * np.sqrt(period)
+
+def VaR(data: pd.DataFrame, **kwargs) -> float: # TODO option to change params
+    trading_periods = 255
+    conf1 = 1 # 99% VaR
+    conf2 = 2.5 # 97.5% VaR
+    
+    close = data.set_index("Date")[
+        "Close" if not "Adj Close" in data.columns else "Adj Close"
+    ].sort_index(ascending=False).head(trading_periods)
+    
+    returns = close.pct_change().dropna()
+    
+    return _to_pct({ # % of $ investment
+        r"99% VaR (10-day)": _var(returns, conf1, 10),
+        r"97.5% VaR (1-day)": _var(returns, conf2),
+        r"99% Expected Shortfall (10-day)": _exp_shortfall(returns, conf1, 10),
+        r"97.5% Expected Shortfall (1-day)": _exp_shortfall(returns, conf2),
+    })

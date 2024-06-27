@@ -48,15 +48,18 @@ def prep_benchmark(returns, bench, cutoff: list[int] = None): # cutoff: [year, m
 
 def main(directory, *args, **kwargs):
     filename_kensho, *_ = args
-    kensho = read(filename_kensho)
-    ndaq = read(dir_ + "indices.xlsx", 1, "Sheet1")
-    spy = qs.utils.download_returns("^SPX")
+    #kensho = read(filename_kensho)
+    #ndaq = read(dir_ + "indices.xlsx", 1, "Sheet1")
+    #spy = qs.utils.download_returns("^SPX")
 
-    ken, spy = prep_benchmark(kensho, spy)
-    byd = qs.utils.download_returns("BYDDF")
-    geely = qs.utils.download_returns("GELYF")
+    #ken, spy = prep_benchmark(kensho, spy)
+    #byd = qs.utils.download_returns("BYDDF")
+    #geely = qs.utils.download_returns("GELYF")
+    a = qs.utils.download_returns("IAU")
+    b = qs.utils.download_returns("GC=F")
 
-    qs.reports.html(geely, spy, output="C:\\Users\\franc\\Downloads\\qs_report.html")
+
+    qs.reports.html(a,b, output="Downloads\\qs_report.html")
     
 if __name__ == "__main__":
     dir_ = os.path.dirname(__file__) + "\\"

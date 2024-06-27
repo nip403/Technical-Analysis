@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from ta import add_all_ta_features
 from ta.utils import dropna
 from openpyxl import load_workbook
+import yfinance as yf
+import random
 import warnings
 
 figsize = (15, 9)
@@ -24,6 +26,24 @@ def write(file: str, data: pd.DataFrame) -> None:
             data.to_excel(fh, sheet_name="Test")
     except:
         return
+    
+def rand_hex() -> str:
+    return f"#{''.join(f'{random.randint(0, 255):02X}' for _ in range(3))}"
+
+def process_data_ticker(ticker: str) -> pd.DataFrame: # disclaimer: yfinance has many reports of inaccurate data
+    ticker = yf.Ticker("MSFT").history(period="max")
+    ticker = ticker.reset_index()
+    
+    return # TODO
+    
+    return add_all_ta_features(
+        dropna(ticker),
+        open="Open",
+        high="High",
+        low="Low",
+        close="Close",
+        volume="Volume",
+    )
 
 def process_data(file_name: str, sheet_name: str) -> pd.DataFrame:
     data = pd.read_excel(file_name, sheet_name=sheet_name)
@@ -38,6 +58,11 @@ def process_data(file_name: str, sheet_name: str) -> pd.DataFrame:
         close="Close",
         volume="Volume",
     )
+    
+def _to_pct(vals: dict) -> dict:
+    return {
+        k: round(100 * v, 2) for k, v in vals.items()
+    }
 
 def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volume=False, rescale=[]): # rows: number of plots, ratios: ratio of plot size
     """Plotting wrapper
@@ -89,6 +114,7 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
         def wrapper(*args, **kwargs):
             candlestick = kwargs.get("candlestick", plot_candlestick)
             volume = kwargs.get("volume", plot_volume)
+            _figsize = kwargs.get("figsize", figsize)
             df = args[0]
             
             if simple:
@@ -96,7 +122,7 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
                 kwargs["ax1"] = ax1
                 axes = [ax1]
             else: 
-                fig, axes = plt.subplots(rows, 1, figsize=figsize, gridspec_kw={"height_ratios": [4, 1] if ratios is None else ratios})
+                fig, axes = plt.subplots(rows, 1, figsize=_figsize, gridspec_kw={"height_ratios": [4, 1] if ratios is None else ratios})
                 ax1 = axes[0]
                 
                 for p, axis in enumerate(axes):
@@ -143,7 +169,7 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
             # label latest price
             latest = df.iloc[-1]
             ax1.annotate(
-                f"<{latest['Close']}>",
+                f"<{round(latest['Close'], 2)}>",
                 xy=(1.01, latest["Close"]),
                 xycoords=("axes fraction", "data"),
                 horizontalalignment="left", 
@@ -161,7 +187,7 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
                 vol.yaxis.set_label_position("left")
             
             for p, a in enumerate(axes):
-                a.legend()
+                a.legend(loc="upper left")
                 a.yaxis.set_ticks_position("right") 
                 a.yaxis.set_label_position("right")
                 
@@ -171,6 +197,10 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
             ax1.set_ylim(bottom=0)
             fig.autofmt_xdate()
             fig.tight_layout()
+            
+            if kwargs.get("DEBUG_1", False):
+                fig.subplots_adjust(hspace=0.1, wspace=0.1)
+            
             plt.show()
         return wrapper
     return dec
