@@ -4,8 +4,10 @@ from ta import add_all_ta_features
 from ta.utils import dropna
 from openpyxl import load_workbook
 import yfinance as yf
+import numpy as np
 import random
 import warnings
+import sys
 
 figsize = (15, 9)
 candle_interval = 3 # biweekly
@@ -30,11 +32,15 @@ def write(file: str, data: pd.DataFrame) -> None:
 def rand_hex() -> str:
     return f"#{''.join(f'{random.randint(0, 255):02X}' for _ in range(3))}"
 
-def process_data_ticker(ticker: str) -> pd.DataFrame: # disclaimer: yfinance has many reports of inaccurate data
-    ticker = yf.Ticker("MSFT").history(period="max")
-    ticker = ticker.reset_index()
-    
-    return # TODO
+def norm(vec: list[int | float]) -> list[float]:
+    vals = np.fromiter(vec, dtype=float)
+    return vals / np.sum(vals)
+
+def process_data_ticker(ticker: str) -> pd.DataFrame: # yfinance api is the worst thing ever invented 
+    ticker = yf.Ticker(ticker).history(period="max").tail(1000)[["Open", "High", "Low", "Close", "Volume"]] # limit to 4 years
+    ticker.index = ticker.index.date
+    ticker.reset_index(inplace=True)
+    ticker.columns = ["Date", "Open", "High", "Low", "Close", "Volume"]
     
     return add_all_ta_features(
         dropna(ticker),
@@ -63,7 +69,20 @@ def _to_pct(vals: dict) -> dict:
     return {
         k: round(100 * v, 2) for k, v in vals.items()
     }
+    
+class AxisHandler: # TODO
+    def __init__(self, axes: dict, **kwargs):
+        self.axes = {int(k[2:]): v for k, v in axes.items() if "ax" in k} # requires format ax[number]
+        
+        for k, v in self.axes.items():
+            setattr(self, f"ax{k}", v)
+            
+    def __getitem__(self, key):
+        return self.axes[key]
 
+    def __setitem__(self, key, value):
+        self.axes[key] = value
+        
 def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volume=False, rescale=[]): # rows: number of plots, ratios: ratio of plot size
     """Plotting wrapper
     

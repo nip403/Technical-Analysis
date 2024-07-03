@@ -8,6 +8,7 @@ import statsmodels.api as sm
 from arch.unitroot import KPSS, ADF
 import itertools as it
 import warnings
+from utils import norm
 
 warnings.filterwarnings("ignore")
 
@@ -20,7 +21,7 @@ warnings.filterwarnings("ignore")
 #from pmdarima.metrics import smape
 #from sklearn.metrics import mean_squared_error
 
-def fibonacci(df: pd.DataFrame) -> pd.DataFrame:
+def fibonacci(df: pd.DataFrame, ext: bool) -> pd.DataFrame:
     highest_swing, lowest_swing = -1, -1
     
     df.index = range(df.shape[0])
@@ -44,7 +45,7 @@ def fibonacci(df: pd.DataFrame) -> pd.DataFrame:
         else:
             levels.append(min_lvl + ((max_lvl - min_lvl) * r))
     
-    return _extensions(sorted(levels))
+    return _extensions(sorted(levels)) if ext else sorted(levels)
 
 def exit_strategy(*, stop_loss: float = None, price: float = None, pct_portfolio: float = None, pct_capital_to_risk: int = 0.02) -> float:
     # % portfolio as a decimal e.g. 0.05
@@ -143,26 +144,62 @@ def _ARCH(data: pd.DataFrame, period: int) -> pd.DataFrame: # very expensive if 
     
     return data
 
-def _exp_shortfall(returns: pd.Series, confidence_lvl: int | float, period: int = 1) -> pd.Series:
-    return returns[returns <= np.percentile(returns, confidence_lvl)].mean() * np.sqrt(period)
+def _exp_shortfall(returns: pd.Series, conf: float = 0.99, period: int = 1) -> float:
+    return returns[returns <= np.percentile(returns, 100 * (1 - conf))].mean() * np.sqrt(period)
     
-def _var(returns: pd.Series, confidence_level: int | float, period: int = 1) -> float:
-    return np.percentile(returns, confidence_level) * np.sqrt(period)
+def _var(returns: pd.Series, conf: float = 0.99, period: int = 1) -> float:
+    return np.percentile(returns, 100 * (1 - conf)) * np.sqrt(period)
 
-def VaR(data: pd.DataFrame, **kwargs) -> float: # TODO option to change params
-    trading_periods = 255
-    conf1 = 1 # 99% VaR
-    conf2 = 2.5 # 97.5% VaR
+def VaR(prices: pd.DataFrame, conf: float = 0.99, period = 10, _close_col: str = "Close", _portfolio: bool = False) -> float:    
+    # conf: 0.99 = 99% confidence level
+    # period: 10 day holding period
     
-    close = data.set_index("Date")[
-        "Close" if not "Adj Close" in data.columns else "Adj Close"
-    ].sort_index(ascending=False).head(trading_periods)
+    trading_periods = 250 
+    returns = prices.set_index("Date")[_close_col].sort_index().head(trading_periods + 1).pct_change().dropna() # off by 1 as d/dt(close) = returns
     
-    returns = close.pct_change().dropna()
+    assert returns.shape[0] # array of close prices cannot be all consecutive 0s when representing a stable asset
+    
+    var = _var(returns, conf, period)
+    es = _exp_shortfall(returns, conf, period)
     
     return _to_pct({ # % of $ investment
-        r"99% VaR (10-day)": _var(returns, conf1, 10),
-        r"97.5% VaR (1-day)": _var(returns, conf2),
-        r"99% Expected Shortfall (10-day)": _exp_shortfall(returns, conf1, 10),
-        r"97.5% Expected Shortfall (1-day)": _exp_shortfall(returns, conf2),
-    })
+        r"99% VaR (10-day)": var,
+        r"99% Expected Shortfall (10-day)": es,
+    }) if not _portfolio else ( # terrible readability, todo
+        [_var(returns, conf, period), _exp_shortfall(returns, conf, period)], returns
+    )
+
+def risk_portfolio(prices: dict[str, pd.DataFrame | pd.Series], weights: dict[str, float], conf: float = 0.99, period: int = 10, _close_col: str = "Close"):
+    """Calculate VaR/ES for each stock/instument and for the overall portfolio
+
+    ALL VALUES IN PERCENTAGES
+
+    Args: (according to FRB regulation)
+        prices (pd.DataFrame): dict of pd dataframes/series for closing prices (length >= 251): {ticker: df, ticker2: df2}, requires "Date" and "Close" as columns, pass in adjusted close header if available
+        weights (dict): dict of weights for each ticker in prices df, ratio is fine (will be normalised)
+        conf (float, optional): confidence interval 0-1. Defaults to 0.99.
+        period (int, optional): time period. Defaults to 10.
+        _close_col (str, optional): pd column name to calculate from.
+    """
+    
+    out = {}
+    portfolio = {}
+
+    assert set(weights.keys()) == set(prices.keys())
+    assert sum(weights.values()) > 0
+    
+    # normalise weights
+    weights = dict(zip(weights.keys(), norm(weights.values())))
+    
+    # var/es for each component
+    for symbol, data in prices.items():
+        out[symbol], returns = VaR(data, conf, period, _close_col, _portfolio=True)
+        portfolio[symbol] = returns.reset_index(drop=True) * weights[symbol]
+    
+    port = pd.concat(portfolio.values(), axis=1, keys=portfolio.keys()).sum(axis=1)
+    out["Total"] = [
+        _var(port, conf, period), 
+        _exp_shortfall(port, conf, period)
+    ]
+    
+    return out
