@@ -15,3 +15,4 @@ Technical analysis and benchmarking tools for personal use, written in Python.
 - high priority: portfolio allocation optimisation - https://freedium.cfd/https://towardsdatascience.com/automating-portfolio-optimization-using-python-9f344b9380b9
 - parabolic sar + aroon
 - kelly criterion for sizing, + other allocation tools like efficient frontier/optimising by var
+- backtesting 
