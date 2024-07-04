@@ -19,7 +19,6 @@ ev > NDAQ - NASDAQ
 # admin
 sys.stdin.reconfigure(encoding='utf-8')
 sys.stdout.reconfigure(encoding='utf-8')
-warnings.filterwarnings("ignore")
 qs.extend_pandas()
 
 def read(f, _t=False, sheet=None): # read csv/xslx: [Date, Open, High, Low, Close, (Change)] 
