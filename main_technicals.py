@@ -1,6 +1,6 @@
 from toolkit.utils import write, process_data, process_data_ticker
-from toolkit.core import PortfolioToolkit, exit_strategy
-from toolkit.visuals import *
+from toolkit.core import exit_strategy
+from toolkit.technicals import *
 import os
     
 def main():
@@ -18,7 +18,7 @@ def main():
         pct_portfolio=None,
         pct_capital_to_risk=0.02,
     ))
-    
+    """
     # full dashboard of all indicators
     all_visual(data)
     
@@ -33,7 +33,7 @@ def main():
     # future
     pred_prophet(data, period=365) # facebook's prophet model - additive regression model using components: piecewise growth curve trend, fourier series, dummy variables
     pred_ARCH(data, period=365) # Autoregressive Conditional Heteroskedasticity
-
+    """
     # individual risk
     var, es = PortfolioToolkit.risk(data) # historical VaR method
     
@@ -48,9 +48,14 @@ def main():
         path=stock_data
     )
     
-    var, es = port.historical_risk() # var/es for each component and total portfolio, expressed in % of total
+    port.plot_allocation()
+    port.portfolio_returns()
+    risk = port.historical_risk() # var/es for each component and total portfolio, expressed in % of total
+   
+    print(risk)
+   
     var, es = port.monte_carlo( # var/es calculated using monte carlo simulation, 100k iterations, 10 day/99% conf int default
-        simulations=100_000,
+        simulations=10_000,
         show=True, # plot predicted cumulative daily return over simulated period & histogram of overall return distribution
     ) 
     

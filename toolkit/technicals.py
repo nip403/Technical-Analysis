@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from copy import deepcopy
-from .core import fibonacci, _prophet, _ARCH, PortfolioToolkit
+import sys
+from .core import fibonacci, _prophet, _ARCH, PortfolioBase
 from .utils import plotter, rand_hex, norm
 from .utils import AxisHandler as Ax
 
@@ -166,79 +167,118 @@ def _all_visual(data: pd.DataFrame, **kwargs) -> None:
             label=f"{round(ratios[i + 1] * 100, 1):>6}% Level: {round(lvl, 2)}"
         )
         
-def plot_allocation(portfolio: dict[str, int | float], title: str = "") -> None:
-    """ args:
-    portfolio (dict[str, int  |  float]): dict of portfolio allocations and their weights
-    
-    e.g.
-    {
-        "MSFT": 10,
-        "AAPL": 20,
-        "META": 30,
-    }
-    """
-    
-    fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(aspect="equal"))
-    ax.set_title(title)
-    lbl = [f"{round(v * 100, 1)}% - {k}" for k, v in zip(portfolio.keys(), norm(portfolio.values()))]
-    
-    wedges, texts = ax.pie(
-        portfolio.values(), 
-        wedgeprops = dict(width=0.5), 
-        startangle = -40
-    )
-    
-    kw = dict(
-        arrowprops = dict(arrowstyle="-"),
-        zorder = 0, 
-        va = "center"
-    )
+class PortfolioToolkit(PortfolioBase):
+    def __init__(self, portfolio_value: int | float, symbols: list[str], weights: list[int | float], data: dict[str, pd.DataFrame] = None, path: str = None):
+        """General utils and Monte Carlo simulation for calculating VaR and CVaR (ES)
 
-    for i, p in enumerate(wedges):
-        ang = (p.theta2 - p.theta1)/2. + p.theta1
-        y = np.sin(np.deg2rad(ang))
-        x = np.cos(np.deg2rad(ang))
+        Args:
+            symbols (list[str]): list of ticker symbols
+            weights (list[int  |  float]): list of weights in the same order
+            data (str, dict[pd.DataFrame], optional): dict of dataframes for given symbols, indexed by date (most recent last) with a "Close" column. If None, data is taken from spreadsheet (path). will be prioritised even if path is provided.
+            path (str, optional): path to spreadsheet, see data.
+        """
         
-        kw["arrowprops"].update({"connectionstyle": f"angle,angleA=0,angleB={ang}"})
-        ax.annotate(
-            lbl[i],
-            xy = (x, y), 
-            xytext = (1.35*np.sign(x), 1.4*y),
-            horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))], 
-            **kw,
+        super().__init__(
+            portfolio_value=portfolio_value, 
+            symbols=symbols, 
+            weights=weights, 
+            data=data, 
+            path=path
+        )
+        
+    def plot_allocation(self, title: str = "") -> None:
+        fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(aspect="equal"))
+        ax.set_title(title)
+        lbl = [f"{round(v * 100, 1)}% - {k}" for k, v in zip(self.sym, self.wt)]
+        
+        wedges, texts = ax.pie(
+            self.wt, 
+            wedgeprops = dict(width=0.5), 
+            startangle = -40
+        )
+        
+        kw = dict(
+            arrowprops = dict(arrowstyle="-"),
+            zorder = 0, 
+            va = "center"
         )
 
-    plt.show()
+        for i, p in enumerate(wedges):
+            ang = (p.theta2 - p.theta1)/2. + p.theta1
+            y = np.sin(np.deg2rad(ang))
+            x = np.cos(np.deg2rad(ang))
+            
+            kw["arrowprops"].update({"connectionstyle": f"angle,angleA=0,angleB={ang}"})
+            ax.annotate(
+                lbl[i],
+                xy = (x, y), 
+                xytext = (1.35*np.sign(x), 1.4*y),
+                horizontalalignment = {-1: "right", 1: "left"}[int(np.sign(x))], 
+                **kw,
+            )
 
-def portfolio_returns(portfolio: dict[str, pd.DataFrame], show: bool = True) -> pd.DataFrame:
-    """ Compatible directly with output from utils.process_data_multiple() 
-    Input e.g.: {
-        ticker: pd.DataFrame[["Date", "Close"]],
-        ...
-    }
-    
-    Returns: df of cumulative returns
-    """
-    
-    ret = PortfolioToolkit.spot_returns(portfolio)  
-    cumret = PortfolioToolkit.cum_returns(portfolio)
-    logret = PortfolioToolkit.log_returns(portfolio)
-    
-    if show:
-        for p, r in enumerate([ret, cumret, logret]):
-            for i in r.columns:
-                r[i].plot()
+        plt.show()
+
+    def portfolio_returns(self, show: bool = True) -> list[pd.DataFrame]:      
+        names = ["", "Cumulative", "Log", "Weighted"]
+                  
+        if show:
+            for p, r in enumerate([self.ret, self.cum_ret - 1, self.log_ret, self.wt_ret]):
+                fig, ax = plt.subplots(figsize=figsize)
                 
-            plt.title(f"Portfolio{' Cumulative' if p else ''} Returns")
-            plt.legend(r.columns)
-            plt.axhline(1, color="black", linestyle="--")
-            plt.ylabel("Multiple")
-            plt.show()
+                label = names[p]
+                
+                #if label == "Cumulative":
+                #    ax.plot(r.index, (1 + self.wt_ret.sum(axis=1)).cumprod() - 1, label="Total Portfolio Return")
+                    
+                for i in r.columns:
+                    r[i].plot(ax=ax, label=i)
+                    
+                ax.set_title(f"Portfolio {label} Returns")
+                ax.legend(r.columns)
+                ax.axhline(0, color="black", linestyle="--")
+                ax.set_ylabel("Multiple")
+                plt.show()
 
-    return ret, cumret, logret
+        sys.exit()
+        return [self.ret, self.cum_ret, self.log_ret, self.wt_ret]
 
+    def _plot_monte_carlo(self, returns: np.ndarray, daily: np.ndarray, days: int, conf: float, var: float) -> None: 
+        ### Simulation Paths ###
+        
+        _, ax = plt.subplots(figsize=figsize)
+        
+        # daily path
+        for i in daily:
+            ax.plot(range(days + 1), np.concatenate(([1], np.cumprod(1 + i))), alpha=0.5, linewidth=0.5)
 
+        # mean path
+        ax.plot([0, days], [1, np.mean(returns)], color="blue", linewidth=2, label='Mean Path')
+        
+        # Plot VaR line
+        ax.axhline(
+            y = -var, 
+            color = "red", 
+            linestyle = "--", 
+            label = f"{days}-day {conf * 100}% VaR: {-(1 + var):.2%}"
+        )
+        
+        ax.set_xlabel("Days")
+        ax.set_ylabel("% Cumulative Return")
+        ax.legend()
+        ax.set_xlim(0, days)
+        ax.grid(True, alpha=0.3)
+        plt.show()
+        
+        ### Summary Histogram ### 
+        
+        _, ax = plt.subplots(figsize=figsize)
 
-# todo asap: create child class for all portfolio plotting, inherit from core portfolio toolkit and add examples to main techinicals.py
-# ^^^ this way you can rewrite portfolio returns visual to be less cursed
-# also move monte_carlo plotting over from utils to here
+        ax.hist(returns, bins=50, density=True)
+        ax.set_xlabel("Scenario Cumulative Gain/Loss (%)")
+        ax.set_ylabel("Frequency")
+        ax.set_title(f"Distribution of % Portfolio Gain/Loss Over {days} Days")
+        ax.axvline(-var, color="r", linestyle="dashed", linewidth=2, label=f"{days}-day {conf * 100}% VaR: {-(1 + var):.2%}")
+        ax.legend()
+
+        plt.show()

@@ -7,7 +7,7 @@ from functools import partial
 import warnings
 from copy import deepcopy
 import sys
-from .utils import norm, _to_pct, process_data_multiple, _plot_monte_carlo
+from .utils import norm, _to_pct, process_data_multiple
 
 sys.stdin.reconfigure(encoding='utf-8')
 sys.stdout.reconfigure(encoding='utf-8')
@@ -173,7 +173,7 @@ class Risk:
             cls._exp_shortfall(returns, conf, period)
         ]
 
-class PortfolioToolkit(Risk):
+class PortfolioBase(Risk):
     def __init__(self, portfolio_value: int | float, symbols: list[str], weights: list[int | float], data: dict[str, pd.DataFrame] = None, path: str = None):
         """General utils and Monte Carlo simulation for calculating VaR and CVaR (ES)
 
@@ -201,7 +201,7 @@ class PortfolioToolkit(Risk):
         
     @classmethod
     def aggregate_portfolio(cls, portfolio: dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """ Intended usage through visuals.portfolio_returns() 
+        """ Intended usage through technicals.portfolio_returns()
         
         Compatible directly with output from utils.process_data_multiple() 
         Input e.g.: {
@@ -227,7 +227,7 @@ class PortfolioToolkit(Risk):
         
     @classmethod
     def spot_returns(cls, portfolio: dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """ Intended usage through visuals.portfolio_returns() 
+        """ Intended usage through technicals.portfolio_returns()
         
         Compatible directly with output from utils.process_data_multiple() 
         Input e.g.: {
@@ -242,7 +242,7 @@ class PortfolioToolkit(Risk):
 
     @classmethod
     def cum_returns(cls, portfolio: dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """ Intended usage through visuals.portfolio_returns() 
+        """ Intended usage through technicals.portfolio_returns()
         
         Compatible directly with output from utils.process_data_multiple() 
         Input e.g.: {
@@ -257,7 +257,7 @@ class PortfolioToolkit(Risk):
 
     @classmethod
     def log_returns(cls, portfolio: dict[str, pd.DataFrame]) -> pd.DataFrame:
-        """ Intended usage through visuals.portfolio_returns() 
+        """ Intended usage through technicals.portfolio_returns()
         
         Compatible directly with output from utils.process_data_multiple() 
         Input e.g.: {
@@ -349,8 +349,8 @@ class PortfolioToolkit(Risk):
         returns = np.cumprod(1 + daily, axis=1)[:, -1] - 1
         var = -np.percentile(returns, 100 * (1 - conf))
         
-        if show: # some serious off by 1 action to be able to show cumulative returns
-            _plot_monte_carlo(
+        if hasattr(self, "_plot_monte_carlo") and show: # some serious off by 1 action to be able to show cumulative returns
+            self._plot_monte_carlo(
                 returns + 1,
                 daily,
                 days,

@@ -16,3 +16,4 @@ Technical analysis and benchmarking tools for personal use, written in Python.
 - kelly criterion for sizing, + other allocation tools like efficient frontier/optimising by var
 - backtesting 
 - add option to return dollar value var/es
+- add compatibility to plot and calculate portfolio holdings with different dates, i.e. purchased from when, and be able to plot cumulative returns from there
