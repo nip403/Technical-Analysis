@@ -2,7 +2,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from ta import add_all_ta_features
-from ta.utils import dropna
 from openpyxl import load_workbook
 import yfinance as yf
 import random
@@ -18,12 +17,12 @@ def _clean_xl(file: str) -> None:
         
     wb.save(file)
     
-def write(file: str, data: pd.DataFrame) -> None:
+def write(file: str, data: pd.DataFrame, sheet_name: str = "Test") -> None:
     try: # in case file is open
         _clean_xl(file)
         
         with pd.ExcelWriter(file, mode="a") as fh:
-            data.to_excel(fh, sheet_name="Test")
+            data.to_excel(fh, sheet_name=sheet_name)
     except:
         return
     
@@ -34,14 +33,14 @@ def norm(vec: list[int | float]) -> list[float]:
     vals = np.fromiter(vec, dtype=float)
     return vals / np.sum(vals)
 
-def process_data_ticker(ticker: str) -> pd.DataFrame: # yfinance api is the worst thing ever invented 
+def process_data_ticker(ticker: str, features: bool = True) -> pd.DataFrame: # yfinance api is the worst thing ever invented 
     ticker = yf.Ticker(ticker).history(period="max").tail(1000)[["Open", "High", "Low", "Close", "Volume"]] # limit to 4 years
     ticker.index = ticker.index.date
     ticker.reset_index(inplace=True)
     ticker.columns = ["Date", "Open", "High", "Low", "Close", "Volume"]
     
-    return add_all_ta_features(
-        dropna(ticker),
+    return ticker.dropna() if not features else add_all_ta_features(
+        ticker.dropna(),
         open="Open",
         high="High",
         low="Low",
@@ -49,13 +48,13 @@ def process_data_ticker(ticker: str) -> pd.DataFrame: # yfinance api is the wors
         volume="Volume",
     )
 
-def process_data(file_name: str, sheet_name: str) -> pd.DataFrame:
+def process_data(file_name: str, sheet_name: str, features: bool = True) -> pd.DataFrame:
     data = pd.read_excel(file_name, sheet_name=sheet_name)
     
-    assert set("Open High Low Close Volume".split()).issubset(data.columns)
+    assert set("Open High Low Close Volume".split() if features else ["Close"]).issubset(data.columns)
     
-    return add_all_ta_features(
-        dropna(data),
+    return data.dropna() if not features else add_all_ta_features(
+        data.dropna(),
         open="Open",
         high="High",
         low="Low",
@@ -63,9 +62,9 @@ def process_data(file_name: str, sheet_name: str) -> pd.DataFrame:
         volume="Volume",
     )
     
-def process_data_multiple(file_name: str, sheet_names: list[str]) -> list[pd.DataFrame]:
+def process_data_multiple(file_name: str, sheet_names: list[str], features: bool = True) -> list[pd.DataFrame]:
     return {
-        i: process_data(file_name, i) for i in sheet_names
+        i: process_data(file_name, i, features) for i in sheet_names
     }
 
 def _to_pct(vals: dict) -> dict:
@@ -86,7 +85,7 @@ class AxisHandler: # TODO
     def __setitem__(self, key, value):
         self.axes[key] = value
         
-def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volume=False, rescale=[]): # rows: number of plots, ratios: ratio of plot size
+def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volume=False, rescale=[]):
     """Plotting wrapper
     
     Decorates a function(
@@ -226,3 +225,43 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
             plt.show()
         return wrapper
     return dec
+
+def _plot_monte_carlo(returns: np.ndarray, daily: np.ndarray, days: int, conf: float, var: float) -> None: # i hate circular imports
+    ### Simulation Paths ###
+    
+    _, ax = plt.subplots(figsize=figsize)
+    
+    # daily path
+    for i in daily:
+        ax.plot(range(days + 1), np.concatenate(([1], np.cumprod(1 + i))), alpha=0.5, linewidth=0.5)
+
+    # mean path
+    ax.plot([0, days], [1, np.mean(returns)], color="blue", linewidth=2, label='Mean Path')
+    
+    # Plot VaR line
+    ax.axhline(
+        y = -var, 
+        color = "red", 
+        linestyle = "--", 
+        label = f"{days}-day {conf * 100}% VaR: {-(1 + var):.2%}"
+    )
+    
+    ax.set_xlabel("Days")
+    ax.set_ylabel("% Cumulative Return")
+    ax.legend()
+    ax.set_xlim(0, days)
+    ax.grid(True, alpha=0.3)
+    plt.show()
+    
+    ### Summary Histogram ### 
+    
+    _, ax = plt.subplots(figsize=figsize)
+
+    ax.hist(returns, bins=50, density=True)
+    ax.set_xlabel("Scenario Cumulative Gain/Loss (%)")
+    ax.set_ylabel("Frequency")
+    ax.set_title(f"Distribution of % Portfolio Gain/Loss Over {days} Days")
+    ax.axvline(-var, color="r", linestyle="dashed", linewidth=2, label=f"{days}-day {conf * 100}% VaR: {-(1 + var):.2%}")
+    ax.legend()
+
+    plt.show()

@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-from .core import fibonacci, _prophet, _ARCH, cum_portfolio_returns, spot_portfolio_returns
+from copy import deepcopy
+from .core import fibonacci, _prophet, _ARCH, PortfolioToolkit
 from .utils import plotter, rand_hex, norm
 from .utils import AxisHandler as Ax
 
@@ -208,7 +209,7 @@ def plot_allocation(portfolio: dict[str, int | float], title: str = "") -> None:
         )
 
     plt.show()
-    
+
 def portfolio_returns(portfolio: dict[str, pd.DataFrame], show: bool = True) -> pd.DataFrame:
     """ Compatible directly with output from utils.process_data_multiple() 
     Input e.g.: {
@@ -219,11 +220,12 @@ def portfolio_returns(portfolio: dict[str, pd.DataFrame], show: bool = True) -> 
     Returns: df of cumulative returns
     """
     
-    ret = spot_portfolio_returns(portfolio.copy())
-    cumret = cum_portfolio_returns(portfolio.copy())
+    ret = PortfolioToolkit.spot_returns(portfolio)  
+    cumret = PortfolioToolkit.cum_returns(portfolio)
+    logret = PortfolioToolkit.log_returns(portfolio)
     
     if show:
-        for p, r in enumerate([ret, cumret]):
+        for p, r in enumerate([ret, cumret, logret]):
             for i in r.columns:
                 r[i].plot()
                 
@@ -233,4 +235,10 @@ def portfolio_returns(portfolio: dict[str, pd.DataFrame], show: bool = True) -> 
             plt.ylabel("Multiple")
             plt.show()
 
-    return ret, cumret
+    return ret, cumret, logret
+
+
+
+# todo asap: create child class for all portfolio plotting, inherit from core portfolio toolkit and add examples to main techinicals.py
+# ^^^ this way you can rewrite portfolio returns visual to be less cursed
+# also move monte_carlo plotting over from utils to here
