@@ -7,7 +7,7 @@ from functools import partial
 import warnings
 from copy import deepcopy
 import sys
-from .utils import norm, _to_pct, process_data_multiple
+from .utils import norm, _to_pct, process_data_multiple, process_ticker_multiple
 
 sys.stdin.reconfigure(encoding='utf-8')
 sys.stdout.reconfigure(encoding='utf-8')
@@ -184,14 +184,19 @@ class PortfolioBase(Risk):
             path (str, optional): path to spreadsheet, see data.
         """
         
-        assert sum(weights) > 0
-        assert data or path
-        
+        assert sum(weights) > 0       
+         
         self.value = portfolio_value
-        
         self.sym = symbols
         self.wt = norm(weights)
-        self.close = data if data is not None else process_data_multiple(path, self.sym, features=False)  
+        
+        if data is not None:
+            self.close = data
+        elif path is not None:
+            self.close = process_data_multiple(path, self.sym, False)  
+        else:
+            self.close = process_ticker_multiple(self.sym, False)
+        
         self.portfolio = self.aggregate_portfolio(self.close)
         
         self.ret = self.spot_returns(self.close)
@@ -292,27 +297,32 @@ class PortfolioBase(Risk):
                 for symbol in self.sym
         }    
         
+        for k, v in risk.items():
+            pos = self.sym.index(k)
+            wt = self.wt[pos]
+            for i in v[:]:
+                risk[k].append(self.value * i * wt)
+        
         risk["Total"] = [
             self._var(self.wt_ret.sum(axis=1), conf, period), 
-            self._exp_shortfall(self.wt_ret.sum(axis=1), conf, period)
+            self._exp_shortfall(self.wt_ret.sum(axis=1), conf, period),
+            self._var(self.wt_ret.sum(axis=1), conf, period) * self.value, 
+            self._exp_shortfall(self.wt_ret.sum(axis=1), conf, period) * self.value,
         ]
+        
+        
         
         return risk
 
-    @classmethod
-    def expected_returns(cls, weights: list[int | float], log_returns: pd.DataFrame) -> pd.DataFrame:
+    def expected_returns(self) -> pd.DataFrame:
         """ daily expected return, assuming future returns are based on historical returns """
         
-        return np.sum(log_returns.mean() * norm(weights))
+        return np.sum(self.log_ret.mean() * self.wt)
 
-    @classmethod
-    def std(cls, weights: list[int | float] | dict[str, int | float], cov_matrix: np.ndarray) -> np.ndarray:
-        """ Use the same ticker order for weights as everything else in the VaR calculation """
+    def std(self) -> np.ndarray:
+        """ returns standard deviation (=volatility) in % of the portfolio """
         
-        weights = norm(weights) if not isinstance(weights, dict) else norm(weights.values())
-        variance = weights.T @ cov_matrix @ weights
-        
-        return np.sqrt(variance)
+        return np.sqrt(self.wt.T @ self.log_ret.cov() @ self.wt) # log-scaled returns covariance matrix
 
     def _simulate(self, expected: float, std: float, days: int, _: None) -> float:
         return (expected * days) + (std * np.sqrt(days) * np.random.normal(0, 1)) # % of portfolio. multiply by portfolio value to get dollar gain/loss for period
@@ -328,9 +338,8 @@ class PortfolioBase(Risk):
             
         Returns: n-day (param) value at risk, n-day expected shortfall
         """
-        covar = self.log_ret.cov() # log-scaled returns covariance matrix
-        std = self.std(self.wt, covar) # standard deviation of portfolio
-        exp = self.expected_returns(self.wt, self.log_ret) # daily expected return (%)
+        std = self.std() # standard deviation of portfolio
+        exp = self.expected_returns() # daily expected return (%)
         
         # monte carlo simulation - constant over period
         """ => averaged simulation over period 
@@ -358,4 +367,4 @@ class PortfolioBase(Risk):
                 var - 1,
             )
         
-        return -var, returns[returns <= var].mean() 
+        return -var, returns[returns <= -var].mean() 

@@ -35,6 +35,7 @@ def norm(vec: list[int | float]) -> list[float]:
 
 def process_data_ticker(ticker: str, features: bool = True) -> pd.DataFrame: # yfinance api is the worst thing ever invented 
     ticker = yf.Ticker(ticker).history(period="max").tail(1000)[["Open", "High", "Low", "Close", "Volume"]] # limit to 4 years
+    
     ticker.index = ticker.index.date
     ticker.reset_index(inplace=True)
     ticker.columns = ["Date", "Open", "High", "Low", "Close", "Volume"]
@@ -61,6 +62,11 @@ def process_data(file_name: str, sheet_name: str, features: bool = True) -> pd.D
         close="Close",
         volume="Volume",
     )
+    
+def process_ticker_multiple(tickers: str, features: bool = True):
+    return {
+        i: process_data_ticker(i, features) for i in tickers
+    }
     
 def process_data_multiple(file_name: str, sheet_names: list[str], features: bool = True) -> list[pd.DataFrame]:
     return {

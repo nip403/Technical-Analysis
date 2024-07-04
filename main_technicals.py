@@ -38,28 +38,39 @@ def main():
     var, es = PortfolioToolkit.risk(data) # historical VaR method
     
     # portfolio analysis
-    symbols = "IAU,USRT,LOUP,ICLN,COUR,CD".split(",")
-    weights = [32, 15, 14, 11, 2, 26]
+    #symbols = "IAU,USRT,LOUP,ICLN,COUR".split(",")
+    #weights = [32, 15, 14, 11, 2]
+    symbols = "IAU,USRT,LOUP,COUR,UDMY,FAN,SMH,SCHH,MXNUSD=X,^TNX".split(",")
+    weights = [25, 5, 3, 1.5, 2, 6, 17.5, 10, 10, 20]
     
     port = PortfolioToolkit(
-        100_000, 
+        100_000,
         symbols,
         weights,
-        path=stock_data
+        #path=stock_data
     )
     
     port.plot_allocation()
     port.portfolio_returns()
     risk = port.historical_risk() # var/es for each component and total portfolio, expressed in % of total
    
-    print(risk)
+    for k, v in risk.items():
+        print(f"{k} 99% 10-day VaR: {round(v[0]*100, 1)}%")
+        print(f"{k} 99% 10-day VaR: ${round(v[2], 1)}%")
+        print(f"{k} 99% 10-day CVaR/ES: {round(v[1]*100, 1)}%")
+        print(f"{k} 99% 10-day CVaR/ES: ${round(v[3], 2)}")
+        print()
    
     var, es = port.monte_carlo( # var/es calculated using monte carlo simulation, 100k iterations, 10 day/99% conf int default
-        simulations=10_000,
-        show=True, # plot predicted cumulative daily return over simulated period & histogram of overall return distribution
+        simulations=1_000,
+        show=0, # plot predicted cumulative daily return over simulated period & histogram of overall return distribution
     ) 
     
+    print("monte carlo", var, var * 100000, es, es * 100000)
+    print("er", port.expected_returns())
+    print(port.std(), port.std()**2)
     
     
 if __name__ == "__main__":
     main()
+    

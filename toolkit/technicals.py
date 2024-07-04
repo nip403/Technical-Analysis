@@ -189,10 +189,27 @@ class PortfolioToolkit(PortfolioBase):
     def plot_allocation(self, title: str = "") -> None:
         fig, ax = plt.subplots(figsize=figsize, subplot_kw=dict(aspect="equal"))
         ax.set_title(title)
-        lbl = [f"{round(v * 100, 1)}% - {k}" for k, v in zip(self.sym, self.wt)]
         
-        wedges, texts = ax.pie(
-            self.wt, 
+        # some neat sorting to reduce chance of overlapping labels
+        wt = self.wt[np.argsort(self.wt)]
+        sym = np.array(self.sym)[np.argsort(self.wt)]
+        
+        if len(self.wt) % 2:
+            fw, wt = wt[0], wt[1:]
+            fs, sym = sym[0], sym[1:]
+
+        wt = np.ravel(np.column_stack(np.array_split(wt, 2)[::-1]), order="C")
+        sym = np.ravel(np.column_stack(np.array_split(sym, 2)[::-1]), order="C")
+        
+        if "fw" in locals().keys():
+            wt = np.insert(wt, 0, fw)
+            sym = np.insert(sym, 0, fs)
+        
+        lbl = [f"{round(w * 100, 1)}% - {s}" for s, w in list(zip(sym, wt))]
+           
+        # donut chart plot
+        wedges, _ = ax.pie(
+            wt, 
             wedgeprops = dict(width=0.5), 
             startangle = -40
         )
@@ -200,7 +217,7 @@ class PortfolioToolkit(PortfolioBase):
         kw = dict(
             arrowprops = dict(arrowstyle="-"),
             zorder = 0, 
-            va = "center"
+            va = "center",
         )
 
         for i, p in enumerate(wedges):
@@ -217,6 +234,7 @@ class PortfolioToolkit(PortfolioBase):
                 **kw,
             )
 
+        plt.tight_layout()
         plt.show()
 
     def portfolio_returns(self, show: bool = True) -> list[pd.DataFrame]:      
@@ -224,9 +242,11 @@ class PortfolioToolkit(PortfolioBase):
                   
         if show:
             for p, r in enumerate([self.ret, self.cum_ret - 1, self.log_ret, self.wt_ret]):
-                fig, ax = plt.subplots(figsize=figsize)
-                
+                _, ax = plt.subplots(figsize=figsize)
                 label = names[p]
+                
+                if not label == "Cumulative":
+                    r = r.copy().tail(250)
                 
                 #if label == "Cumulative":
                 #    ax.plot(r.index, (1 + self.wt_ret.sum(axis=1)).cumprod() - 1, label="Total Portfolio Return")
@@ -240,7 +260,6 @@ class PortfolioToolkit(PortfolioBase):
                 ax.set_ylabel("Multiple")
                 plt.show()
 
-        sys.exit()
         return [self.ret, self.cum_ret, self.log_ret, self.wt_ret]
 
     def _plot_monte_carlo(self, returns: np.ndarray, daily: np.ndarray, days: int, conf: float, var: float) -> None: 
