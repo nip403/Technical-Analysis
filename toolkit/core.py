@@ -157,8 +157,8 @@ class Risk:
             prices.set_index("Date", inplace=True)
         except:
             pass
-        
-        returns = prices[_close_col].sort_index().head(cls.trading_periods + 1).pct_change().dropna() # off by 1 as d/dt(close) = returns
+
+        returns = prices[_close_col].sort_index().tail(cls.trading_periods + 1).pct_change().dropna() # off by 1 as d/dt(close) = returns
         
         assert returns.shape[0] # array of close prices cannot be all consecutive 0s (e.g. when representing a 0/low risk asset set price to 1s)
         
