@@ -18,9 +18,10 @@ def main():
         pct_portfolio=None,
         pct_capital_to_risk=0.02,
     ))
-    """
-    # full dashboard of all indicators
     all_visual(data)
+    #"""
+    # full dashboard of all indicators
+    
     
     # historical
     stock(data)
@@ -33,7 +34,7 @@ def main():
     # future
     pred_prophet(data, period=365) # facebook's prophet model - additive regression model using components: piecewise growth curve trend, fourier series, dummy variables
     pred_ARCH(data, period=365) # Autoregressive Conditional Heteroskedasticity
-    """
+    #"""
     # individual risk
     var, es = PortfolioToolkit.risk(data) # historical VaR method
     

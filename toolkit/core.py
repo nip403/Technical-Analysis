@@ -309,9 +309,7 @@ class PortfolioBase(Risk):
             self._var(self.wt_ret.sum(axis=1), conf, period) * self.value, 
             self._exp_shortfall(self.wt_ret.sum(axis=1), conf, period) * self.value,
         ]
-        
-        
-        
+         
         return risk
 
     def expected_returns(self) -> pd.DataFrame:

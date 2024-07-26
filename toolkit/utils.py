@@ -4,6 +4,7 @@ import numpy as np
 from ta import add_all_ta_features
 from openpyxl import load_workbook
 import yfinance as yf
+from functools import wraps
 import random
 
 figsize = (15, 9)
@@ -136,8 +137,9 @@ def plotter(simple=True, rows=2, ratios=None, plot_candlestick=False, plot_volum
     
     if ratios is not None:
         assert rows == len(ratios)
-    
+
     def dec(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             candlestick = kwargs.get("candlestick", plot_candlestick)
             volume = kwargs.get("volume", plot_volume)
